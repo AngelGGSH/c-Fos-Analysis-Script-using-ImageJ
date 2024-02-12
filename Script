@@ -1,0 +1,83 @@
+from ij import IJ
+from ij.io import OpenDialog, FileSaver
+from ij.plugin.frame import RoiManager
+from ij.gui import WaitForUserDialog, Toolbar
+from ij.measure import ResultsTable
+import os
+
+#############################
+## Moscarello c-Fos Script ##
+#############################
+
+#Procedure
+### Do not close any window until you saved your analyzed data###
+# 1. Change values with three "###" accordingly to get the best results possible
+# 2. Run code 
+# 3. Select the folder with the images to analyze 
+# 4. Select the folder to save the analyzed images and the text file with the area of the ROIs
+# 5. Select ROIs for the images 
+# 6. The summary window displays the count data so save and name it according to the brain region analyzed
+# 7. Check if the text file with areas is saved in the folder you selected 
+#DONE#
+
+
+def process_image(imp, directory, filename, save_directory, areas):
+    imp.show()
+
+    rm = RoiManager.getInstance()
+    if not rm:
+        rm = RoiManager()
+
+    IJ.setTool(Toolbar.FREEROI)  ### OVAL(Circle ROI), FREEROI (Draw the ROI), RECTANGLE (self explanatory...)
+    
+    WaitForUserDialog("Select the area, then click OK.").show()
+    roi1 = imp.getRoi()
+    imp.setRoi(roi1)
+    IJ.run(imp, "Measure", "")
+    table = ResultsTable.getResultsTable() 
+    area = table.getValue("Area", 0)
+    areas.append(area)
+    rm.addRoi(roi1)
+    IJ.setAutoThreshold(imp, "Default dark no-reset")
+    
+    IJ.setRawThreshold(imp, 135, 255)  ### Change threshold depending on brain region
+    
+    IJ.run(imp, "Analyze Particles...", "size=3-15 circularity=0.50-1.00 display summarize overlay") ### size and circularity to desired values 
+    
+    IJ.run("Clear Results", "");
+
+  
+    fs = FileSaver(imp)
+    fs.saveAsTiff(os.path.join(save_directory, filename))
+
+    imp.close()
+
+def main():
+    od = OpenDialog("Choose a folder containing images", None)
+    directory = od.getDirectory()
+
+    save_dialog = OpenDialog("Choose a folder to save results", None)
+    save_directory = save_dialog.getDirectory()
+
+    file_list = os.listdir(directory)
+    areas = []
+
+    for filename in file_list:
+        if filename.endswith(('.tif', '.tiff', '.jpg', '.jpeg', '.png')): 
+            path = os.path.join(directory, filename)
+
+          
+            imp = IJ.openImage(path)
+            IJ.run(imp, "Set Scale...", "distance=1.369 known=1 unit=um global")
+            IJ.run(imp, "8-bit", "")
+            IJ.run(imp, "Invert", "")
+            process_image(imp, directory, filename, save_directory, areas)
+
+  
+    txt_file = os.path.join(save_directory, 'Areas.txt')
+    with open(txt_file, 'w') as f:
+        for area in areas:
+            f.write("{}\n".format(area))
+
+if __name__ == "__main__":
+    main()
